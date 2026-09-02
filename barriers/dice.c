@@ -5,7 +5,7 @@
 #include<pthread.h>
 
 #define THREAD_NUM 8
-
+pthread_b barrier;
 int diceValues[8];
 int status[8] = {0};
 
