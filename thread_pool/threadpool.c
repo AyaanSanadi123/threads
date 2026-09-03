@@ -138,5 +138,49 @@ bool thread_pool_submit(ThreadPool* pool, void (*execute)(void*), void* arg){
         pthread_mutex_unlock(&(pool -> lock));
         return false;
      }
+
+     // now we package the task into the ring queue 
+     pool -> task_queue[pool -> tail].execute = execute;
+     pool -> task_queue[pool -> tail].arg = arg;
      
+     pool -> tail = (pool->tail + 1) % pool->queue_capacity;
+
+     pool -> count ++;
+
+     pthread_cond_signal(&(pool -> notify));
+     pthread_mutex_unlock(&(pool -> lock));
+     return true;
+     
+}
+
+
+void thread_pool_destroy(ThreadPool* pool){
+    if(pool == NULL) return;
+
+    // begin the shutdown process 
+     pthread_mutex_lock(&(pool -> lock));
+
+     pool -> shutdown = true ;
+
+     // send a sigal to all the threads, wake them up
+     pthread_cond_broadcast(&(pool -> notify));
+     // unlock and let the threads finish execution,
+     // if you dont unlock now, you create a deadlock 
+     pthread_mutex_unlock(&(pool -> lock));
+
+     // wait for all the threads to finish execution
+     for (int i = 0; i < pool -> num_threads; i++)
+     {
+       if (pthread_join(pool->threads[i], NULL) != 0) {
+            fprintf(stderr, "Warning: Failed to join thread %d during teardown\n", i);
+        }
+     }
+     // destroy the mutex,cond
+     pthread_mutex_destroy(&(pool->lock));
+    pthread_cond_destroy(&(pool->notify));
+
+    // free the pool 
+    free(pool->threads);
+    free(pool->task_queue);
+    free(pool);
 }
